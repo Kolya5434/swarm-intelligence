@@ -1,80 +1,62 @@
-import numpy as np
 import random
+import numpy as np
 
-class Particle:
-    def __init__(self, num_nodes):
-        self.num_nodes = num_nodes
-        self.position = np.random.permutation(num_nodes)  # Random path
-        self.best_position = self.position.copy()
-        self.best_cost = float('inf')  # Initialize with infinity
-        self.velocity = np.zeros(num_nodes)  # Velocity is initially zero
+coordinates = [(0, 0), (2, 4), (5, 5), (7, 3), (10, 2), (4, 8)]
 
-    def evaluate(self, cost_matrix):
-        # Calculate the cost of the current path
-        cost = 0
-        for i in range(len(self.position) - 1):
-            cost += cost_matrix[self.position[i], self.position[i + 1]]
-        return cost
+def distance(a, b):
+    return np.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
 
-    def update_velocity(self, global_best_position):
-        w = 0.5  # Inertia weight
-        c1 = 1.5  # Cognitive (particle) weight
-        c2 = 1.5  # Social (global) weight
+def fitness(solution):
+    return sum(distance(coordinates[a], coordinates[b]) for a, b in zip(solution, solution[1:]))
 
-        for i in range(self.num_nodes):
-            r1 = random.random()
-            r2 = random.random()
-            if r1 < 0.5:  # Randomly decide whether to swap two nodes
-                j = random.randint(0, self.num_nodes - 1)
-                self.position[i], self.position[j] = self.position[j], self.position[i]
+def generate_population(size):
+    population = []
+    for _ in range(size):
+        individual = list(range(len(coordinates)))
+        random.shuffle(individual)
+        population.append(individual)
+    return population
 
-    def update_position(self):
-        self.position = np.unique(self.position)  # Ensure the path is unique
+def select(population, fitnesses, k=3):
+    selected = random.choices(population, weights=fitnesses, k=k)
+    return selected
 
-class PSO:
-    def __init__(self, cost_matrix, num_particles, max_iterations):
-        self.cost_matrix = cost_matrix
-        self.num_particles = num_particles
-        self.max_iterations = max_iterations
-        self.particles = [Particle(len(cost_matrix)) for _ in range(num_particles)]
-        self.global_best_cost = float('inf')
-        self.global_best_position = None
+def crossover(parent1, parent2):
+    size = len(parent1)
+    start, end = sorted(random.sample(range(size), 2))
+    child = [None] * size
+    child[start:end] = parent1[start:end]
+    pointer = 0
+    for i in range(size):
+        if child[i] is None:
+            while parent2[pointer] in child:
+                pointer += 1
+            child[i] = parent2[pointer]
+    return child
 
-    def optimize(self):
-        for _ in range(self.max_iterations):
-            for particle in self.particles:
-                cost = particle.evaluate(self.cost_matrix)
-                if cost < particle.best_cost:
-                    particle.best_cost = cost
-                    particle.best_position = particle.position.copy()
+def mutate(individual, mutation_rate=0.01):
+    for i in range(len(individual)):
+        if random.random() < mutation_rate:
+            j = random.randint(0, len(individual) - 1)
+            individual[i], individual[j] = individual[j], individual[i]
 
-                if cost < self.global_best_cost:
-                    self.global_best_cost = cost
-                    self.global_best_position = particle.position.copy()
+def genetic_algorithm(population_size, generations):
+    population = generate_population(population_size)
+    for generation in range(generations):
+        fitnesses = [1 / fitness(ind) for ind in population]
+        new_population = []
+        for _ in range(population_size // 2):
+            parents = select(population, fitnesses, k=2)
+            child1 = crossover(parents[0], parents[1])
+            child2 = crossover(parents[1], parents[0])
+            mutate(child1)
+            mutate(child2)
+            new_population.extend([child1, child2])
+        population = new_population
+        best_solution = min(population, key=fitness)
+        print(f"Generation {generation}, Best solution fitness: {fitness(best_solution)}")
+    return best_solution
 
-            for particle in self.particles:
-                particle.update_velocity(self.global_best_position)
-
-        return self.global_best_position, self.global_best_cost
-
-def main():
-    cost_matrix = np.array([[0, 2, 9, 10],
-                             [1, 0, 6, 4],
-                             [15, 7, 0, 8],
-                             [6, 3, 12, 0]])
-
-    # Print the cost matrix
-    print("Cost matrix:")
-    print(cost_matrix)
-
-    num_particles = 30
-    max_iterations = 100
-
-    pso = PSO(cost_matrix, num_particles, max_iterations)
-    best_path, best_cost = pso.optimize()
-
-    print("Best path:", best_path)
-    print("Best cost:", best_cost)
-
-if __name__ == "__main__":
-    main()
+best_route = genetic_algorithm(population_size=100, generations=500)
+print("Найкраща знайдена послідовність точок:", best_route)
+print("Мінімальна довжина трубопроводів:", fitness(best_route))
